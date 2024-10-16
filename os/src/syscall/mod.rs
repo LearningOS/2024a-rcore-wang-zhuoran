@@ -47,6 +47,7 @@ pub fn syscall(syscall_id: usize, args: [usize; 3]) -> isize {
     // init_schedule_time里存的时间应该是任务第一次被调度的时间，所以这里应该用当前时间减去任务第一次被调度的时间
     TASK_MANAGER.set_current_task_time(get_time_ms() - init_schedule_time[TASK_MANAGER.get_current_task()]);
     TASK_MANAGER.add_syscall_times(syscall_id as u32);
+    drop(init_schedule_time);
     match syscall_id {
         SYSCALL_WRITE => sys_write(args[0], args[1] as *const u8, args[2]),
         SYSCALL_EXIT => sys_exit(args[0] as i32),

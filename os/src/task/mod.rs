@@ -150,12 +150,21 @@ impl TaskManager {
     }
     /// get current task id
     pub fn get_current_task(&self) -> usize {
-        self.inner.exclusive_access().current_task
+        // self.inner.exclusive_access().current_task
+        let inner = self.inner.exclusive_access();
+        let current_task_id = inner.current_task;
+        drop(inner);
+        current_task_id
     }
 
     /// get current syscall times of current task
     pub fn get_syscall_times(&self) -> [u32; MAX_SYSCALL_NUM] {
-        self.inner.exclusive_access().tasks[self.get_current_task()].task_info.get_syscall_times()
+        // self.inner.exclusive_access().tasks[self.get_current_task()].task_info.get_syscall_times()
+        let inner = self.inner.exclusive_access();
+        let current_task_id = inner.current_task;
+        let syscall_times = inner.tasks[current_task_id].task_info.get_syscall_times();
+        drop(inner);
+        syscall_times
     }
 
     /// Write the syscall times of current task to TaskInfo
@@ -163,12 +172,14 @@ impl TaskManager {
         let mut inner = self.inner.exclusive_access();
         let current = inner.current_task;
         inner.tasks[current].task_info.add_syscall_times(syscall_id as usize);
+        drop(inner);
     }
     /// Write the running status of current task to TaskInfo
     pub fn write_running_status(&self) {
         let mut inner = self.inner.exclusive_access();
         let current = inner.current_task;
         inner.tasks[current].task_info.set_status(TaskStatus::Running);
+        drop(inner);
     }
 
     /// set current task time
@@ -176,7 +187,20 @@ impl TaskManager {
         let mut inner = self.inner.exclusive_access();
         let current = inner.current_task;
         inner.tasks[current].task_info.set_time(time);
+        drop(inner);
     }
+    /// Get the current task time
+    // pub fn get_current_task_time(&self) -> usize {
+    //     self.inner.exclusive_access().tasks[self.get_current_task()].task_info.get_time()
+    // }
+    pub fn get_current_task_time(&self) -> usize {
+        let inner = self.inner.exclusive_access();
+        let current_task_id = inner.current_task;
+        let time = inner.tasks[current_task_id].task_info.get_time();
+        drop(inner);
+        time
+    }
+    
 }
 
 /// Run the first task in task list.
@@ -230,4 +254,9 @@ pub fn write_running_status() {
 /// Set current task time
 pub fn set_current_task_time(time: usize) {
     TASK_MANAGER.set_current_task_time(time);
+}
+
+/// Get current task time
+pub fn get_current_task_time() -> usize {
+    TASK_MANAGER.get_current_task_time()
 }

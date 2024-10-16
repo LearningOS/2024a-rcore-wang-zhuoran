@@ -58,6 +58,11 @@ impl TaskInfo {
     pub fn set_syscall_times(&mut self, syscall_times: [u32; MAX_SYSCALL_NUM]) {
         self.syscall_times = syscall_times;
     }
+
+    /// get task time
+    pub fn get_time(&self) -> usize {
+        self.time
+    }
 }
 
 /// task exits and submit an exit code
@@ -95,9 +100,7 @@ pub fn sys_task_info(_ti: *mut TaskInfo) -> isize {
     unsafe {
         (*_ti).set_status(TaskStatus::Running);   
         (*_ti).set_syscall_times(TASK_MANAGER.get_syscall_times());
+        (*_ti).set_time(TASK_MANAGER.get_current_task_time());  
     }
-    
-    
-
     0
 }
