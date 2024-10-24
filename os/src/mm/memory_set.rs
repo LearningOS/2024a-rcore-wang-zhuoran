@@ -262,7 +262,26 @@ impl MemorySet {
             false
         }
     }
+    /// remove the virtual page number
+    pub fn remove(&mut self, start_va: VirtAddr, end_va: VirtAddr) -> isize {
+        let start_vpn = start_va.floor();
+        let end_vpn = end_va.ceil();
+            // 查找包含该范围的区域
+        let map_area = self.areas.iter_mut().filter(|a| {
+            a.vpn_range.get_start() <= start_vpn && 
+            a.vpn_range.get_end() >= end_vpn
+        }).next();
+
+        if let Some(map_area) = map_area {
+            map_area.unmap(&mut self.page_table);
+            return 0;
+        } else {
+            // panic!("No area found for the given range!");
+            return -1;
+        }
+    }
 }
+
 /// map area structure, controls a contiguous piece of virtual memory
 pub struct MapArea {
     vpn_range: VPNRange,

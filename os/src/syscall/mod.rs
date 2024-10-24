@@ -29,9 +29,30 @@ mod fs;
 mod process;
 
 use fs::*;
+#[allow(unused_imports)]
 use process::*;
+use lazy_static::lazy_static;
+use crate::{config::MAX_APP_NUM, task::TASK_MANAGER, timer::get_time_us};
+pub use process::*;
+use crate::sync::UPSafeCell;
+
+lazy_static! {
+    /// Global variable: initial schedule time of each task
+    pub static ref INIT_SCHEDULE_TIME: UPSafeCell<[usize; MAX_APP_NUM]> = unsafe { 
+        UPSafeCell::new([0usize; MAX_APP_NUM]) 
+    };
+}
+
+
 /// handle syscall exception with `syscall_id` and other arguments
 pub fn syscall(syscall_id: usize, args: [usize; 3]) -> isize {
+
+    let init_schedule_time = INIT_SCHEDULE_TIME.exclusive_access();
+    // init_schedule_time里存的时间应该是任务第一次被调度的时间，所以这里应该用当前时间减去任务第一次被调度的时间
+    TASK_MANAGER.set_current_task_time(get_time_us() - init_schedule_time[TASK_MANAGER.get_current_task()]);
+    TASK_MANAGER.add_syscall_times(syscall_id as u32);
+    drop(init_schedule_time);
+    
     match syscall_id {
         SYSCALL_WRITE => sys_write(args[0], args[1] as *const u8, args[2]),
         SYSCALL_EXIT => sys_exit(args[0] as i32),
