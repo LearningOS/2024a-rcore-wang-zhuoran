@@ -42,11 +42,37 @@ const SYSCALL_TASK_INFO: usize = 410;
 
 mod fs;
 mod process;
-
+#[allow(unused_imports)]
+use alloc::task;
 use fs::*;
-use process::*;
+pub use process::*;
+use lazy_static::lazy_static;
+use crate::task::current_task;
+use alloc::collections::BTreeMap;
+use crate::timer::get_time_us;
+use crate::sync::UPSafeCell;
+
+lazy_static! {
+    /// Global variable: initial schedule time of each task
+    pub static ref INIT_SCHEDULE_TIME: UPSafeCell<BTreeMap<usize,usize>> = unsafe {
+        UPSafeCell::new(BTreeMap::new())
+    };
+}
+
+
 /// handle syscall exception with `syscall_id` and other arguments
 pub fn syscall(syscall_id: usize, args: [usize; 3]) -> isize {
+
+    // let current_pid = current_task().unwrap().pid.0;
+    let init_schedule_time = INIT_SCHEDULE_TIME.exclusive_access();
+    
+    if let Some(task_control_block) = current_task() {
+        let mut task_info = task_control_block.task_info_exclusive_access();
+        task_info.add_syscall_times(syscall_id);
+        task_info.set_time(get_time_us() - init_schedule_time.get(&task_control_block.getpid()).unwrap());
+        drop(task_info);
+    }
+    drop(init_schedule_time);
     match syscall_id {
         SYSCALL_READ => sys_read(args[0], args[1] as *const u8, args[2]),
         SYSCALL_WRITE => sys_write(args[0], args[1] as *const u8, args[2]),
