@@ -8,7 +8,7 @@ const EFS_MAGIC: u32 = 0x3b800001;
 /// The max number of direct inodes
 const INODE_DIRECT_COUNT: usize = 28;
 /// The max length of inode name
-const NAME_LENGTH_LIMIT: usize = 27;
+const NAME_LENGTH_LIMIT: usize = 26;
 /// The max number of indirect1 inodes
 const INODE_INDIRECT1_COUNT: usize = BLOCK_SZ / 4;
 /// The max number of indirect2 inodes
@@ -24,15 +24,10 @@ const INDIRECT2_BOUND: usize = INDIRECT1_BOUND + INODE_INDIRECT2_COUNT;
 #[repr(C)]
 pub struct SuperBlock {
     magic: u32,
-    /// Total number of blocks
     pub total_blocks: u32,
-    /// Number of blocks for inode bitmap
     pub inode_bitmap_blocks: u32,
-    /// Number of blocks for inode area
     pub inode_area_blocks: u32,
-    /// Number of blocks for data bitmap
     pub data_bitmap_blocks: u32,
-    /// Number of blocks for data area
     pub data_area_blocks: u32,
 }
 
@@ -73,11 +68,9 @@ impl SuperBlock {
     }
 }
 /// Type of a disk inode
-#[derive(PartialEq, Clone, Copy)]
+#[derive(PartialEq)]
 pub enum DiskInodeType {
-    /// File
     File,
-    /// Directory
     Directory,
 }
 
@@ -88,18 +81,11 @@ type DataBlock = [u8; BLOCK_SZ];
 /// A disk inode
 #[repr(C)]
 pub struct DiskInode {
-    /// Size of the file
     pub size: u32,
-    /// Direct inodes
     pub direct: [u32; INODE_DIRECT_COUNT],
-    /// Indirect1 
     pub indirect1: u32,
-    /// Indirect2
     pub indirect2: u32,
-    /// Type of the inode
     type_: DiskInodeType,
-    /// Number of hard links
-    pub nlink: u32,
 }
 
 impl DiskInode {
@@ -111,7 +97,6 @@ impl DiskInode {
         self.indirect1 = 0;
         self.indirect2 = 0;
         self.type_ = type_;
-        self.nlink = 1;
     }
     /// Whether this inode is a directory
     pub fn is_dir(&self) -> bool {
@@ -402,14 +387,11 @@ impl DiskInode {
         }
         write_size
     }
-    /// Get type of current disk inode
-    pub fn get_type(&self) -> DiskInodeType {
-        self.type_
-    }
 }
 /// A directory entry
 #[repr(C)]
 pub struct DirEntry {
+    valid: bool,
     name: [u8; NAME_LENGTH_LIMIT + 1],
     inode_id: u32,
 }
@@ -420,6 +402,7 @@ impl DirEntry {
     /// Create an empty directory entry
     pub fn empty() -> Self {
         Self {
+            valid: true,
             name: [0u8; NAME_LENGTH_LIMIT + 1],
             inode_id: 0,
         }
@@ -429,6 +412,7 @@ impl DirEntry {
         let mut bytes = [0u8; NAME_LENGTH_LIMIT + 1];
         bytes[..name.len()].copy_from_slice(name.as_bytes());
         Self {
+            valid: true,
             name: bytes,
             inode_id,
         }
@@ -449,5 +433,13 @@ impl DirEntry {
     /// Get inode number of the entry
     pub fn inode_id(&self) -> u32 {
         self.inode_id
+    }
+    /// Check if the entry is valid
+    pub fn valid(&self) -> bool {
+        self.valid
+    }
+    /// Invalidate the entry
+    pub fn invalidate(&mut self) {
+        self.valid = false;
     }
 }

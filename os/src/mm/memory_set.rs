@@ -78,6 +78,18 @@ impl MemorySet {
             self.areas.remove(idx);
         }
     }
+    /// Drop the frame area
+    pub fn drop_frame_area(
+        &mut self,
+        start_va: VirtAddr,
+        end_va: VirtAddr,
+    ) {
+        let start_vpn: VirtPageNum = start_va.floor();
+        let end_vpn: VirtPageNum = end_va.ceil();
+        for vpn in VPNRange::new(start_vpn, end_vpn) {
+            self.page_table.unmap(vpn);
+        }
+    }
     /// Add a new MapArea into this MemorySet.
     /// Assuming that there are no conflicts in the virtual address
     /// space.
@@ -316,25 +328,6 @@ impl MemorySet {
             true
         } else {
             false
-        }
-    }
-
-    /// remove the virtual page number
-    pub fn remove(&mut self, start_va: VirtAddr, end_va: VirtAddr) -> isize {
-        let start_vpn = start_va.floor();
-        let end_vpn = end_va.ceil();
-            // 查找包含该范围的区域
-        let map_area = self.areas.iter_mut().filter(|a| {
-            a.vpn_range.get_start() <= start_vpn && 
-            a.vpn_range.get_end() >= end_vpn
-        }).next();
-
-        if let Some(map_area) = map_area {
-            map_area.unmap(&mut self.page_table);
-            return 0;
-        } else {
-            // panic!("No area found for the given range!");
-            return -1;
         }
     }
 }
