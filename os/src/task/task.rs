@@ -1,7 +1,7 @@
 //! Types related to task management & Functions for completely changing TCB
 use super::TaskContext;
 use super::{kstack_alloc, pid_alloc, KernelStack, PidHandle};
-use crate::config::TRAP_CONTEXT_BASE;
+use crate::config::{TRAP_CONTEXT_BASE, BIG_STRIDE};
 use crate::fs::{File, Stdin, Stdout};
 use crate::mm::{MemorySet, PhysPageNum, VirtAddr, KERNEL_SPACE};
 use crate::sync::UPSafeCell;
@@ -10,7 +10,7 @@ use alloc::sync::{Arc, Weak};
 use alloc::vec;
 use alloc::vec::Vec;
 use core::cell::RefMut;
-
+pub use crate::syscall::TaskInfo;
 /// Task control block structure
 ///
 /// Directly save the contents that will not change during running
@@ -24,6 +24,9 @@ pub struct TaskControlBlock {
 
     /// Mutable
     inner: UPSafeCell<TaskControlBlockInner>,
+
+    /// Mutable Task information
+    task_info: UPSafeCell<TaskInfo>,
 }
 
 impl TaskControlBlock {
@@ -35,6 +38,11 @@ impl TaskControlBlock {
     pub fn get_user_token(&self) -> usize {
         let inner = self.inner_exclusive_access();
         inner.memory_set.token()
+    }
+
+    /// Get the mutable reference of the task information
+    pub fn task_info_exclusive_access(&self) -> RefMut<'_, TaskInfo> {
+        self.task_info.exclusive_access()
     }
 }
 
@@ -71,6 +79,15 @@ pub struct TaskControlBlockInner {
 
     /// Program break
     pub program_brk: usize,
+
+    /// priority
+    pub priority: usize,
+
+    /// stride
+    pub stride: usize,
+
+    /// pass
+    pub pass: usize,
 }
 
 impl TaskControlBlockInner {
@@ -112,6 +129,7 @@ impl TaskControlBlock {
         let kernel_stack = kstack_alloc();
         let kernel_stack_top = kernel_stack.get_top();
         // push a task context which goes to trap_return to the top of kernel stack
+        let pass = BIG_STRIDE / 16;
         let task_control_block = Self {
             pid: pid_handle,
             kernel_stack,
@@ -135,7 +153,13 @@ impl TaskControlBlock {
                     ],
                     heap_bottom: user_sp,
                     program_brk: user_sp,
+                    priority: 16,
+                    stride: 0,
+                    pass: pass,
                 })
+            },
+            task_info: unsafe {
+                UPSafeCell::new(TaskInfo::new())
             },
         };
         // prepare TrapContext in user space
@@ -200,6 +224,15 @@ impl TaskControlBlock {
                 new_fd_table.push(None);
             }
         }
+
+        // copy task info
+        let task_info = self.task_info_exclusive_access().clone();
+        // copy stride and pass
+        let stride = parent_inner.stride;
+        let pass = parent_inner.pass;
+        let priority = parent_inner.priority;
+
+
         let task_control_block = Arc::new(TaskControlBlock {
             pid: pid_handle,
             kernel_stack,
@@ -216,7 +249,13 @@ impl TaskControlBlock {
                     fd_table: new_fd_table,
                     heap_bottom: parent_inner.heap_bottom,
                     program_brk: parent_inner.program_brk,
+                    stride: stride,
+                    pass: pass,
+                    priority: priority,
                 })
+            },
+            task_info: unsafe {
+                UPSafeCell::new(task_info)
             },
         });
         // add child

@@ -11,7 +11,7 @@ use crate::sync::UPSafeCell;
 use crate::trap::TrapContext;
 use alloc::sync::Arc;
 use lazy_static::*;
-
+use crate::syscall::INIT_SCHEDULE_TIME;
 /// Processor management structure
 pub struct Processor {
     ///The task currently executing on the current processor
@@ -61,6 +61,13 @@ pub fn run_tasks() {
             let mut task_inner = task.inner_exclusive_access();
             let next_task_cx_ptr = &task_inner.task_cx as *const TaskContext;
             task_inner.task_status = TaskStatus::Running;
+            // record the time of the first scheduling 记录首次调度时间
+            let mut init_schedule_time = INIT_SCHEDULE_TIME.exclusive_access();
+            let next = task.getpid();
+            if init_schedule_time.get(&next).is_none() {
+                init_schedule_time.insert(next, crate::timer::get_time_us());
+            }
+            drop(init_schedule_time);
             // release coming task_inner manually
             drop(task_inner);
             // release coming task TCB manually

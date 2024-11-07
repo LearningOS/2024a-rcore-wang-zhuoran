@@ -25,3 +25,7 @@ pub const CLOCK_FREQ: usize = 12500000;
 pub const MEMORY_END: usize = 0x88000000;
 /// The base address of control registers in Virtio_Block device
 pub const MMIO: &[(usize, usize)] = &[(0x10001000, 0x1000)];
+/// the max number of apps in memory
+pub const MAX_APP_NUM: usize = 32;
+/// Big Stride
+pub const BIG_STRIDE: usize = 8192;

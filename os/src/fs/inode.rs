@@ -4,7 +4,7 @@
 //!
 //! `UPSafeCell<OSInodeInner>` -> `OSInode`: for static `ROOT_INODE`,we
 //! need to wrap `OSInodeInner` into `UPSafeCell`
-use super::File;
+use super::{File, StatMode};
 use crate::drivers::BLOCK_DEVICE;
 use crate::mm::UserBuffer;
 use crate::sync::UPSafeCell;
@@ -13,6 +13,7 @@ use alloc::vec::Vec;
 use bitflags::*;
 use easy_fs::{EasyFileSystem, Inode};
 use lazy_static::*;
+
 
 /// inode in memory
 /// A wrapper around a filesystem inode
@@ -52,14 +53,28 @@ impl OSInode {
         }
         v
     }
+
+
+
 }
 
 lazy_static! {
+    /// The root inode
     pub static ref ROOT_INODE: Arc<Inode> = {
         let efs = EasyFileSystem::open(BLOCK_DEVICE.clone());
         Arc::new(EasyFileSystem::root_inode(&efs))
     };
 }
+
+/// link
+// pub fn linkat(old_name: &str, new_name: &str) -> isize {
+//     ROOT_INODE.link(old_name, new_name)
+// }
+
+/// unlink
+// pub fn unlinkat(name: &str) -> isize {
+//     ROOT_INODE.unlink(name)
+// }
 
 /// List all apps in the root directory
 pub fn list_apps() {
@@ -154,5 +169,43 @@ impl File for OSInode {
             total_write_size += write_size;
         }
         total_write_size
+    }
+/*
+pub struct Stat {
+    /// 文件所在磁盘驱动器号，该实验中写死为 0 即可
+    pub dev: u64,
+    /// inode 文件所在 inode 编号
+    pub ino: u64,
+    /// 文件类型
+    pub mode: StatMode,
+    /// 硬链接数量，初始为1
+    pub nlink: u32,
+    /// 无需考虑，为了兼容性设计
+    pad: [u64; 7],
+}
+*/
+    fn stat(&self) -> super::Stat {
+        let inner = self.inner.exclusive_access();
+        let inode = inner.inode.clone();
+        let dev: u64 = 0;
+        let ino = inode.get_inode_id() as u64;
+        let mode = if inode.is_dir() {
+            StatMode::DIR
+        } else {
+            StatMode::FILE
+            
+        };
+
+        let nlink = inode.find_hard_link(&crate::fs::ROOT_INODE.clone()) as u32;
+
+        let pad = [0u64; 7];
+
+        super::Stat {
+            dev,
+            ino,
+            mode,
+            nlink,
+            pad,
+        }
     }
 }
