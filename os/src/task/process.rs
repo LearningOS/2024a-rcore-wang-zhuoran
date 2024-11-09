@@ -7,14 +7,14 @@ use super::{add_task, SignalFlags};
 use super::{pid_alloc, PidHandle};
 use crate::fs::{File, Stdin, Stdout};
 use crate::mm::{translated_refmut, MemorySet, KERNEL_SPACE};
-use crate::sync::{Condvar, Mutex, Semaphore, UPSafeCell};
+use crate::sync::{ResourceTracker, Condvar, Mutex, Semaphore, UPSafeCell};
 use crate::trap::{trap_handler, TrapContext};
 use alloc::string::String;
 use alloc::sync::{Arc, Weak};
 use alloc::vec;
 use alloc::vec::Vec;
 use core::cell::RefMut;
-use crate::sync::ResourceTracker;
+
 /// Process Control Block
 pub struct ProcessControlBlock {
     /// immutable
@@ -27,6 +27,8 @@ pub struct ProcessControlBlock {
 pub struct ProcessControlBlockInner {
     /// is zombie?
     pub is_zombie: bool,
+    /// deadlock detect
+    pub deadlock_detect: bool,
     /// memory set(address space)
     pub memory_set: MemorySet,
     /// parent process
@@ -49,9 +51,9 @@ pub struct ProcessControlBlockInner {
     pub semaphore_list: Vec<Option<Arc<Semaphore>>>,
     /// condvar list
     pub condvar_list: Vec<Option<Arc<Condvar>>>,
-    /// mutex tracker
+    /// mutex resourcetracker
     pub mutex_tracker: ResourceTracker,
-    /// semaphore tracker
+    /// semaphore resourcetracker
     pub semaphore_tracker: ResourceTracker,
 }
 
@@ -72,10 +74,7 @@ impl ProcessControlBlockInner {
     }
     /// allocate a new task id
     pub fn alloc_tid(&mut self) -> usize {
-        let tid = self.task_res_allocator.alloc();
-        // self.mutex_tracker.resize_task(tid);
-        // self.semaphore_tracker.resize_task(tid);
-        tid
+        self.task_res_allocator.alloc()
     }
     /// deallocate a task id
     pub fn dealloc_tid(&mut self, tid: usize) {
@@ -108,6 +107,7 @@ impl ProcessControlBlock {
             inner: unsafe {
                 UPSafeCell::new(ProcessControlBlockInner {
                     is_zombie: false,
+                    deadlock_detect: false,
                     memory_set,
                     parent: None,
                     children: Vec::new(),
@@ -237,14 +237,13 @@ impl ProcessControlBlock {
                 new_fd_table.push(None);
             }
         }
-        // let parent_mutex_tracker = parent.mutex_tracker.clone();
-        // let parent_semaphore_tracker = parent.semaphore_tracker.clone();
         // create child process pcb
         let child = Arc::new(Self {
             pid,
             inner: unsafe {
                 UPSafeCell::new(ProcessControlBlockInner {
                     is_zombie: false,
+                    deadlock_detect: false,
                     memory_set,
                     parent: Some(Arc::downgrade(self)),
                     children: Vec::new(),
@@ -256,8 +255,6 @@ impl ProcessControlBlock {
                     mutex_list: Vec::new(),
                     semaphore_list: Vec::new(),
                     condvar_list: Vec::new(),
-                    // parent_mutex_tracker,
-                    // parent_semaphore_tracker,
                     mutex_tracker: ResourceTracker::new(),
                     semaphore_tracker: ResourceTracker::new(),
                 })
