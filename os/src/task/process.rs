@@ -14,7 +14,7 @@ use alloc::sync::{Arc, Weak};
 use alloc::vec;
 use alloc::vec::Vec;
 use core::cell::RefMut;
-
+use crate::sync::ResourceTracker;
 /// Process Control Block
 pub struct ProcessControlBlock {
     /// immutable
@@ -49,6 +49,10 @@ pub struct ProcessControlBlockInner {
     pub semaphore_list: Vec<Option<Arc<Semaphore>>>,
     /// condvar list
     pub condvar_list: Vec<Option<Arc<Condvar>>>,
+    /// mutex tracker
+    pub mutex_tracker: ResourceTracker,
+    /// semaphore tracker
+    pub semaphore_tracker: ResourceTracker,
 }
 
 impl ProcessControlBlockInner {
@@ -68,7 +72,10 @@ impl ProcessControlBlockInner {
     }
     /// allocate a new task id
     pub fn alloc_tid(&mut self) -> usize {
-        self.task_res_allocator.alloc()
+        let tid = self.task_res_allocator.alloc();
+        // self.mutex_tracker.resize_task(tid);
+        // self.semaphore_tracker.resize_task(tid);
+        tid
     }
     /// deallocate a task id
     pub fn dealloc_tid(&mut self, tid: usize) {
@@ -119,6 +126,8 @@ impl ProcessControlBlock {
                     mutex_list: Vec::new(),
                     semaphore_list: Vec::new(),
                     condvar_list: Vec::new(),
+                    mutex_tracker: ResourceTracker::new(),
+                    semaphore_tracker: ResourceTracker::new(),
                 })
             },
         });
@@ -228,6 +237,8 @@ impl ProcessControlBlock {
                 new_fd_table.push(None);
             }
         }
+        // let parent_mutex_tracker = parent.mutex_tracker.clone();
+        // let parent_semaphore_tracker = parent.semaphore_tracker.clone();
         // create child process pcb
         let child = Arc::new(Self {
             pid,
@@ -245,6 +256,10 @@ impl ProcessControlBlock {
                     mutex_list: Vec::new(),
                     semaphore_list: Vec::new(),
                     condvar_list: Vec::new(),
+                    // parent_mutex_tracker,
+                    // parent_semaphore_tracker,
+                    mutex_tracker: ResourceTracker::new(),
+                    semaphore_tracker: ResourceTracker::new(),
                 })
             },
         });
