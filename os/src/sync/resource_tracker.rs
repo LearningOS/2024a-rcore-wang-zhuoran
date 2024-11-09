@@ -39,6 +39,12 @@ impl ResourceTracker {
                 vec.push(0);
             }
         }
+
+        for tid in 0..self.allocation.len() {
+            if res_id < self.need[tid].len() {
+                self.need[tid][res_id] = self.available[res_id] - self.allocation[tid][res_id];
+            }
+        }
     }
     /// resize the task
     pub fn resize_task(&mut self, tid: usize) {
